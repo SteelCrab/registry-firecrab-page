@@ -21,15 +21,20 @@ supported by validating and reading missing segments from the package key.
 Publishing a new catalog entry is enough to expose every directory and
 download link; no per-release HTML update is required.
 
-A catalog entry with `distribution: "kernel"` publishes one of firecrab's
-digest-pinned, per-architecture Firecracker kernels (see
-`firecrab-api/src/oci/kernel.rs` in the main firecrab repository), keyed as
-`kernel/<kernel-version>/<architecture>/<alias>.tar.zst`. It flows through
-the same `version`/`architecture`/`package` hierarchy as an OS image, so no
-code change is needed to expose a new kernel release — the index page groups
-`kernel/` under a separate "Kernels" heading, apart from OS image
-distributions, purely by grouping the `kernel` distribution name at render
-time.
+firecrab's digest-pinned, per-architecture Firecracker kernels (see
+`firecrab-api/src/oci/kernel.rs` in the main firecrab repository) are
+published to a **separate** `/kernel/catalog.json`, not the root
+`catalog.json` — its top-level array is `kernels`, not `images`, and entries
+have no `distribution` field. The browser fetches both catalogs and merges
+them before rendering; `kernel/catalog.json` is optional; a `404` there just
+means no kernels are published yet, and the rest of the page still renders.
+
+Each kernel entry's `package` (`kernel/<kernel-version>/<architecture>/<alias>.tar.zst`)
+still fits the same 4-segment `distribution/version/architecture/filename`
+shape as an OS image, so it flows through the same parsing and directory
+rendering unchanged, grouped under a "Kernels" heading (everything else
+falls under "Images") purely because its path's first segment is literally
+`kernel`.
 
 ## Deployment
 

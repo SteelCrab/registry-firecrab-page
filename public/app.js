@@ -153,16 +153,30 @@ function render(records) {
   appendText("Not found\n");
 }
 
-fetch("/catalog.json", { cache: "no-store" })
-  .then((response) => {
+function fetchCatalog(url) {
+  return fetch(url, { cache: "no-store" }).then((response) => {
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
     return response.json();
-  })
+  });
+}
+
+fetchCatalog("/catalog.json")
   .then((catalog) => {
     const images = Array.isArray(catalog.images) ? catalog.images : [];
-    const records = images.map(parseImage).filter(Boolean);
+    // The kernel catalog is published separately from the image catalog, so
+    // it's fetched independently and merged. It's optional: a registry with
+    // no published kernels has no /kernel/catalog.json at all.
+    return fetchCatalog("/kernel/catalog.json")
+      .then((kernelCatalog) =>
+        Array.isArray(kernelCatalog.kernels) ? kernelCatalog.kernels : [],
+      )
+      .catch(() => [])
+      .then((kernels) => [...images, ...kernels]);
+  })
+  .then((entries) => {
+    const records = entries.map(parseImage).filter(Boolean);
     render(records);
   })
   .catch((error) => {
