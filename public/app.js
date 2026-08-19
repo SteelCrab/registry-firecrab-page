@@ -147,6 +147,16 @@ function render(records) {
     for (const image of packages) {
       appendLink(image.filename, packageUrl(image.packagePath), image.filename);
     }
+    // Every published distribution/version/architecture directory ships a
+    // shared SHA256SUMS alongside its packages, but it isn't a catalog.json
+    // entry, so it's linked by directory convention rather than parsed data.
+    if (packages.length) {
+      appendLink(
+        "SHA256SUMS",
+        packageUrl([...currentPath, "SHA256SUMS"].join("/")),
+        "SHA256SUMS",
+      );
+    }
     return;
   }
 
