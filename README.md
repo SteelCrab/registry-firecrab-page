@@ -33,14 +33,29 @@ time.
 
 ## Deployment
 
-Pushes to `main` that change `public/index.html` or `public/app.js` upload
-those two files to the `registry` R2 bucket. The workflow uploads `app.js`
-first and `index.html` last. It does not modify `catalog.json` or image
-packages.
+`.github/workflows/deploy-r2.yml` uploads `public/app.js` then
+`public/index.html` to the `registry` R2 bucket, in that order, and touches
+nothing else (not `catalog.json`, not image or kernel packages). It is
+**manual only** (`workflow_dispatch`) because `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID` are not configured as repository secrets; add both as
+GitHub Actions secrets (a token with object write access to the `registry`
+bucket) and switch the workflow back to a `push` trigger to automate this.
 
-Add these GitHub Actions secrets before the first deployment:
+Until then, deploy by hand from a machine with a Cloudflare login:
 
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN` with object write access to the `registry` bucket
+```sh
+npm install --no-save wrangler@4
+./node_modules/.bin/wrangler login
+
+./node_modules/.bin/wrangler r2 object put registry/app.js \
+  --file public/app.js --remote \
+  --content-type "application/javascript; charset=utf-8" \
+  --cache-control "no-cache"
+
+./node_modules/.bin/wrangler r2 object put registry/index.html \
+  --file public/index.html --remote \
+  --content-type "text/html; charset=utf-8" \
+  --cache-control "no-cache"
+```
 
 The zone URL Rewrite Rule maps `/` to `/index.html`; it does not upload files.
