@@ -1,4 +1,0 @@
-/catalog.json https://downloads.registry.firecrab.dev/catalog.json 302
-/alpine/* https://downloads.registry.firecrab.dev/alpine/:splat 302
-/ubuntu/* https://downloads.registry.firecrab.dev/ubuntu/:splat 302
-/rocky/* https://downloads.registry.firecrab.dev/rocky/:splat 302

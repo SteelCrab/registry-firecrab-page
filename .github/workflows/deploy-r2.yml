@@ -1,0 +1,42 @@
+name: Deploy registry index to R2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - public/index.html
+      - public/app.js
+      - .github/workflows/deploy-r2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: registry-index-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Upload static index
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Validate static files
+        run: |
+          test -s public/index.html
+          test -s public/app.js
+          node --check public/app.js
+
+      - name: Upload static files to R2
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          command: |
+            r2 object put registry/app.js --file public/app.js --remote --content-type "application/javascript; charset=utf-8" --cache-control "no-cache"
+            r2 object put registry/index.html --file public/index.html --remote --content-type "text/html; charset=utf-8" --cache-control "no-cache"

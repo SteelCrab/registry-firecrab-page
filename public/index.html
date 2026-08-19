@@ -3,32 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Firecrab M2Image Registry</title>
+    <title>Index of /</title>
+    <script src="/app.js" defer></script>
   </head>
   <body>
-    <pre>
-Firecrab M2Image Registry
-=========================
-
-<a href="/catalog.json">catalog.json</a>
-
-alpine/
-└── 3.24/
-    ├── <a href="/alpine/3.24/alpine-3.24.tar.zst">alpine-3.24.tar.zst</a> [x86_64]
-    └── aarch64/
-        └── <a href="/alpine/3.24/aarch64/alpine-3.24.tar.zst">alpine-3.24.tar.zst</a>
-
-ubuntu/
-└── 26.04/
-    ├── <a href="/ubuntu/26.04/ubuntu-26.04.tar.zst">ubuntu-26.04.tar.zst</a> [x86_64]
-    └── aarch64/
-        └── <a href="/ubuntu/26.04/aarch64/ubuntu-26.04.tar.zst">ubuntu-26.04.tar.zst</a>
-
-rocky/
-└── 9.8/
-    ├── <a href="/rocky/9.8/rocky-9.8.tar.zst">rocky-9.8.tar.zst</a> [x86_64]
-    └── aarch64/
-        └── <a href="/rocky/9.8/aarch64/rocky-9.8.tar.zst">rocky-9.8.tar.zst</a>
-    </pre>
+    <pre id="listing">Loading catalog.json...</pre>
+    <noscript><a href="/catalog.json">catalog.json</a></noscript>
   </body>
 </html>
