@@ -150,14 +150,15 @@ function render(records) {
   }
 
   if (currentPath.length === 1) {
-    // The kernel catalog lives at kernel/catalog.json, a sibling of the
-    // version directories, not under the root catalog.json this distribution
-    // is otherwise built from - so it's linked the same way SHA256SUMS is:
-    // by directory convention, not from parsed catalog data.
-    if (currentPath[0] === "kernel") {
-      appendLink("catalog.json", packageUrl("kernel/catalog.json"));
-      appendText("\n");
-    }
+    // kernel has its own catalog.json, a sibling of its version directories.
+    // Every other distribution has no such per-distribution file - they're
+    // all built from the shared root catalog.json instead. Either way this
+    // is a directory-convention link, not something parsed catalog data
+    // points to.
+    const catalogHref =
+      currentPath[0] === "kernel" ? packageUrl("kernel/catalog.json") : "/catalog.json";
+    appendLink("catalog.json", catalogHref);
+    appendText("\n");
     const versions = records
       .filter((record) => record.distribution === currentPath[0])
       .map((record) => record.version);
