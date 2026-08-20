@@ -118,10 +118,7 @@ function render(records) {
   document.title = `Index of ${pathLabel}`;
   listing.textContent = `Index of ${pathLabel}\n${"=".repeat(9 + pathLabel.length)}\n\n`;
 
-  if (currentPath.length === 0) {
-    appendLink("catalog.json", "/catalog.json");
-    appendText("\n");
-  } else {
+  if (currentPath.length !== 0) {
     appendDirectoryLink("../", currentPath.slice(0, -1));
   }
 
@@ -132,6 +129,7 @@ function render(records) {
 
     if (images.length) {
       appendText("Images/\n");
+      appendLink("  catalog.json", "/catalog.json");
       for (const distribution of images) {
         appendDirectoryLink(`  ${distribution}/`, [distribution]);
       }
