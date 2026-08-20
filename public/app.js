@@ -1,10 +1,20 @@
 "use strict";
 
 const listing = document.getElementById("listing");
-const query = new URLSearchParams(window.location.search);
-const currentPath = (query.get("path") || "")
-  .split("/")
-  .filter(Boolean);
+
+// A path can arrive two ways: a clean URL like /kernel/7.1.8/ (what every
+// link on this page now generates and what a shared/bookmarked link looks
+// like), or the legacy /index.html?path=kernel/7.1.8 query form (kept
+// working for old links). ?path=, when present, wins.
+function derivePath() {
+  const query = new URLSearchParams(window.location.search);
+  const pathParam = query.get("path");
+  const raw = pathParam !== null ? pathParam : window.location.pathname;
+  return raw.split("/").filter(Boolean);
+}
+
+let currentPath = derivePath();
+let records = [];
 
 function appendText(value) {
   listing.appendChild(document.createTextNode(value));
@@ -19,13 +29,41 @@ function appendLink(label, href, download) {
   }
   listing.appendChild(link);
   appendText("\n");
+  return link;
+}
+
+// Directory links are navigated client-side (pushState), so a click never
+// hits the network: R2 has no real object at these clean-path URLs, only
+// /index.html and the actual package files. The href is still a real,
+// shareable clean URL - it just needs a server-side rewrite (the same kind
+// that already maps / to /index.html) to resolve on a fresh visit.
+function appendDirectoryLink(label, parts) {
+  const link = appendLink(label, directoryUrl(parts));
+  link.addEventListener("click", (event) => {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    event.preventDefault();
+    if (link.href !== window.location.href) {
+      history.pushState(null, "", link.href);
+    }
+    currentPath = parts;
+    render(records);
+  });
 }
 
 function directoryUrl(parts) {
   if (parts.length === 0) {
     return "/";
   }
-  return `/index.html?path=${encodeURIComponent(parts.join("/"))}`;
+  return `/${parts.map(encodeURIComponent).join("/")}/`;
 }
 
 function packageUrl(packagePath) {
@@ -84,7 +122,7 @@ function render(records) {
     appendLink("catalog.json", "/catalog.json");
     appendText("\n");
   } else {
-    appendLink("../", directoryUrl(currentPath.slice(0, -1)));
+    appendDirectoryLink("../", currentPath.slice(0, -1));
   }
 
   if (currentPath.length === 0) {
@@ -95,7 +133,7 @@ function render(records) {
     if (images.length) {
       appendText("Images/\n");
       for (const distribution of images) {
-        appendLink(`  ${distribution}/`, directoryUrl([distribution]));
+        appendDirectoryLink(`  ${distribution}/`, [distribution]);
       }
     }
 
@@ -105,7 +143,7 @@ function render(records) {
       }
       appendText("Kernels/\n");
       for (const distribution of kernels) {
-        appendLink(`  ${distribution}/`, directoryUrl([distribution]));
+        appendDirectoryLink(`  ${distribution}/`, [distribution]);
       }
     }
     return;
@@ -116,7 +154,7 @@ function render(records) {
       .filter((record) => record.distribution === currentPath[0])
       .map((record) => record.version);
     for (const version of uniqueSorted(versions)) {
-      appendLink(`${version}/`, directoryUrl([...currentPath, version]));
+      appendDirectoryLink(`${version}/`, [...currentPath, version]);
     }
     return;
   }
@@ -130,7 +168,7 @@ function render(records) {
       )
       .map((record) => record.architecture);
     for (const architecture of uniqueSorted(architectures)) {
-      appendLink(`${architecture}/`, directoryUrl([...currentPath, architecture]));
+      appendDirectoryLink(`${architecture}/`, [...currentPath, architecture]);
     }
     return;
   }
@@ -163,6 +201,11 @@ function render(records) {
   appendText("Not found\n");
 }
 
+window.addEventListener("popstate", () => {
+  currentPath = derivePath();
+  render(records);
+});
+
 function fetchCatalog(url) {
   return fetch(url, { cache: "no-store" }).then((response) => {
     if (!response.ok) {
@@ -186,7 +229,7 @@ fetchCatalog("/catalog.json")
       .then((kernels) => [...images, ...kernels]);
   })
   .then((entries) => {
-    const records = entries.map(parseImage).filter(Boolean);
+    records = entries.map(parseImage).filter(Boolean);
     render(records);
   })
   .catch((error) => {
