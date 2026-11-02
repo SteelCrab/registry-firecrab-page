@@ -2,14 +2,11 @@
 
 const listing = document.getElementById("listing");
 
-// A path can arrive two ways: a clean URL like /kernel/7.1.8/ (what every
-// link on this page now generates and what a shared/bookmarked link looks
-// like), or the legacy /index.html?path=kernel/7.1.8 query form (kept
-// working for old links). ?path=, when present, wins.
 function derivePath() {
   const query = new URLSearchParams(window.location.search);
   const pathParam = query.get("path");
-  const raw = pathParam !== null ? pathParam : window.location.pathname;
+  const pathname = window.location.pathname === "/index.html" ? "/" : window.location.pathname;
+  const raw = pathParam !== null ? pathParam : pathname;
   return raw.split("/").filter(Boolean);
 }
 
@@ -32,11 +29,6 @@ function appendLink(label, href, download) {
   return link;
 }
 
-// Directory links are navigated client-side (pushState), so a click never
-// hits the network: R2 has no real object at these clean-path URLs, only
-// /index.html and the actual package files. The href is still a real,
-// shareable clean URL - it just needs a server-side rewrite (the same kind
-// that already maps / to /index.html) to resolve on a fresh visit.
 function appendDirectoryLink(label, parts) {
   const link = appendLink(label, directoryUrl(parts));
   link.addEventListener("click", (event) => {
@@ -63,7 +55,8 @@ function directoryUrl(parts) {
   if (parts.length === 0) {
     return "/";
   }
-  return `/${parts.map(encodeURIComponent).join("/")}/`;
+  // R2 only rewrites the root to index.html. Query paths also work on reload.
+  return `/?path=${parts.map(encodeURIComponent).join("/")}`;
 }
 
 function packageUrl(packagePath) {
@@ -81,35 +74,38 @@ function uniqueSorted(values) {
   return [...new Set(values)].sort(compareNames);
 }
 
-function parseImage(image) {
-  if (!image || typeof image.package !== "string") {
+function parseKernel(kernel) {
+  if (!kernel || typeof kernel.package !== "string") {
     return null;
   }
 
-  const parts = image.package.split("/").filter(Boolean);
-  if (parts.length !== 4) {
+  const parts = kernel.package.split("/");
+  if (
+    ![4, 5].includes(parts.length) ||
+    parts.some((part) => !part || part === "." || part === ".." || part.includes("\\"))
+  ) {
     return null;
   }
 
-  const [pathDistribution, pathVersion, pathArchitecture, filename] = parts;
-  const distribution = image.distribution || pathDistribution;
-  const version = image.distributionVersion || image.series || pathVersion;
-  const architecture = image.architecture || pathArchitecture;
+  const [distribution, version] = parts;
+  const architecture = parts.at(-2);
+  const filename = parts.at(-1);
 
   if (
-    distribution !== pathDistribution ||
-    version !== pathVersion ||
-    architecture !== pathArchitecture
+    distribution !== "kernel" ||
+    version !== kernel.version ||
+    architecture !== kernel.architecture ||
+    (parts.length === 5 && !/^r[1-9]\d*$/.test(parts[2]))
   ) {
     return null;
   }
 
   return {
-    distribution,
     version,
     architecture,
     filename,
-    packagePath: image.package,
+    packagePath: kernel.package,
+    checksumPath: `${parts.slice(0, -1).join("/")}/SHA256SUMS`,
   };
 }
 
@@ -123,44 +119,24 @@ function render(records) {
   }
 
   if (currentPath.length === 0) {
-    const distributions = uniqueSorted(records.map((record) => record.distribution));
-    const kernels = distributions.filter((distribution) => distribution === "kernel");
-    const images = distributions.filter((distribution) => distribution !== "kernel");
-
-    if (images.length) {
-      appendText("Images/\n");
-      appendLink("  catalog.json", "/catalog.json");
-      for (const distribution of images) {
-        appendDirectoryLink(`  ${distribution}/`, [distribution]);
-      }
-    }
-
-    if (kernels.length) {
-      if (images.length) {
-        appendText("\n");
-      }
-      appendText("Kernels/\n");
-      for (const distribution of kernels) {
-        appendDirectoryLink(`  ${distribution}/`, [distribution]);
-      }
+    appendText("Kernels/\n");
+    appendDirectoryLink("  kernel/", ["kernel"]);
+    if (!records.length) {
+      appendText("No kernels published.\n");
     }
     return;
   }
 
+  if (currentPath[0] !== "kernel") {
+    appendText("Not found\n");
+    return;
+  }
+
   if (currentPath.length === 1) {
-    // kernel has its own catalog.json, a sibling of its version directories.
-    // Every other distribution has no such per-distribution file - they're
-    // all built from the shared root catalog.json instead. Either way this
-    // is a directory-convention link, not something parsed catalog data
-    // points to.
-    const catalogHref =
-      currentPath[0] === "kernel" ? packageUrl("kernel/catalog.json") : "/catalog.json";
-    appendLink("catalog.json", catalogHref);
+    appendLink("catalog.json", "/kernel/catalog.json");
     appendText("\n");
-    const versions = records
-      .filter((record) => record.distribution === currentPath[0])
-      .map((record) => record.version);
-    for (const version of uniqueSorted(versions)) {
+    const versions = records.map((record) => record.version);
+    for (const version of uniqueSorted(versions).reverse()) {
       appendDirectoryLink(`${version}/`, [...currentPath, version]);
     }
     return;
@@ -168,11 +144,7 @@ function render(records) {
 
   if (currentPath.length === 2) {
     const architectures = records
-      .filter(
-        (record) =>
-          record.distribution === currentPath[0] &&
-          record.version === currentPath[1],
-      )
+      .filter((record) => record.version === currentPath[1])
       .map((record) => record.architecture);
     for (const architecture of uniqueSorted(architectures)) {
       appendDirectoryLink(`${architecture}/`, [...currentPath, architecture]);
@@ -184,23 +156,15 @@ function render(records) {
     const packages = records
       .filter(
         (record) =>
-          record.distribution === currentPath[0] &&
           record.version === currentPath[1] &&
           record.architecture === currentPath[2],
       )
       .sort((left, right) => compareNames(left.filename, right.filename));
-    for (const image of packages) {
-      appendLink(image.filename, packageUrl(image.packagePath), image.filename);
+    for (const kernel of packages) {
+      appendLink(kernel.filename, packageUrl(kernel.packagePath), kernel.filename);
     }
-    // Every published distribution/version/architecture directory ships a
-    // shared SHA256SUMS alongside its packages, but it isn't a catalog.json
-    // entry, so it's linked by directory convention rather than parsed data.
-    if (packages.length) {
-      appendLink(
-        "SHA256SUMS",
-        packageUrl([...currentPath, "SHA256SUMS"].join("/")),
-        "SHA256SUMS",
-      );
+    for (const checksum of uniqueSorted(packages.map((kernel) => kernel.checksumPath))) {
+      appendLink("SHA256SUMS", packageUrl(checksum), "SHA256SUMS");
     }
     return;
   }
@@ -222,23 +186,14 @@ function fetchCatalog(url) {
   });
 }
 
-fetchCatalog("/catalog.json")
+fetchCatalog("/kernel/catalog.json")
   .then((catalog) => {
-    const images = Array.isArray(catalog.images) ? catalog.images : [];
-    // The kernel catalog is published separately from the image catalog, so
-    // it's fetched independently and merged. It's optional: a registry with
-    // no published kernels has no /kernel/catalog.json at all.
-    return fetchCatalog("/kernel/catalog.json")
-      .then((kernelCatalog) =>
-        Array.isArray(kernelCatalog.kernels) ? kernelCatalog.kernels : [],
-      )
-      .catch(() => [])
-      .then((kernels) => [...images, ...kernels]);
-  })
-  .then((entries) => {
-    records = entries.map(parseImage).filter(Boolean);
+    if (!Array.isArray(catalog.kernels)) {
+      throw new Error("Invalid kernel catalog");
+    }
+    records = catalog.kernels.map(parseKernel).filter(Boolean);
     render(records);
   })
   .catch((error) => {
-    listing.textContent = `Could not load catalog.json: ${error.message}\n`;
+    listing.textContent = `Could not load kernel/catalog.json: ${error.message}\n`;
   });
